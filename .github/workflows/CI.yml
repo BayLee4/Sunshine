@@ -779,42 +779,19 @@ jobs:
           name: sunshine-macports
           path: artifacts/
 
-      - name: Fix permissions
+      - name: Fix screen capture permissions
+        if: ${{ matrix.os_version != 12 }}  # macOS-12 is okay
+        # can be removed if the following is fixed in the runner image
+        # https://github.com/actions/runner-images/issues/9529
+        # https://github.com/actions/runner-images/pull/9530
         run: |
           # https://apple.stackexchange.com/questions/362865/macos-list-apps-authorized-for-full-disk-access
-          # https://github.com/actions/runner-images/issues/9529
-          # https://github.com/actions/runner-images/pull/9530
 
-          # function to execute sql query for each value
-          function execute_sql_query {
-            local value=$1
-            local dbPath=$2
-
-            echo "Executing SQL query for value: $value"
-            sudo sqlite3 "$dbPath" "INSERT OR IGNORE INTO access VALUES($value);"
-          }
-
-          # Find all provisioner paths and store them in an array
-          readarray -t provisioner_paths < <(sudo find /opt /usr -name provisioner)
-          echo "Provisioner paths: ${provisioner_paths[@]}"
-
-          # Create an empty array
-          declare -a values=()
-
-          # Loop through the provisioner paths and add them to the values array
-          for p_path in "${provisioner_paths[@]}"; do
-            # Adjust the service name and other parameters as needed
-            values+=("'kTCCServiceAccessibility','${p_path}',1,2,4,1,NULL,NULL,0,'UNUSED',NULL,NULL,1592919552")
-            values+=("'kTCCServiceScreenCapture','${p_path}',1,2,4,1,NULL,NULL,0,'UNUSED',NULL,0,1687786159")
-          done
-
-          echo "Values: ${values[@]}"
-
+          # permissions for screen capture
+          values="'kTCCServiceScreenCapture','/opt/off/opt/runner/provisioner/provisioner',1,2,4,1,NULL,NULL,0,'UNUSED',NULL,0,1687786159"
           if [[ "${{ matrix.os_version }}" == "14" ]]; then
             # TCC access table in Sonoma has extra 4 columns: pid, pid_version, boot_uuid, last_reminded
-            for i in "${!values[@]}"; do
-              values[$i]="${values[$i]},NULL,NULL,'UNUSED',${values[$i]##*,}"
-            done
+            values="${values},NULL,NULL,'UNUSED',${values##*,}"
           fi
 
           # system and user databases
@@ -823,28 +800,36 @@ jobs:
             "$HOME/Library/Application Support/com.apple.TCC/TCC.db"
           )
 
-          for value in "${values[@]}"; do
-            for dbPath in "${dbPaths[@]}"; do
-              echo "Column names for $dbPath"
-              echo "-------------------"
-              sudo sqlite3 "$dbPath" "PRAGMA table_info(access);"
-              echo "Current permissions for $dbPath"
-              echo "-------------------"
-              sudo sqlite3 "$dbPath" "SELECT * FROM access WHERE service='kTCCServiceScreenCapture';"
-              execute_sql_query "$value" "$dbPath"
-              echo "Updated permissions for $dbPath"
-              echo "-------------------"
-              sudo sqlite3 "$dbPath" "SELECT * FROM access WHERE service='kTCCServiceScreenCapture';"
-            done
+          sqlQuery="INSERT OR IGNORE INTO access VALUES($values);"
+
+          for dbPath in "${dbPaths[@]}"; do
+            echo "Column names for $dbPath"
+            echo "-------------------"
+            sudo sqlite3 "$dbPath" "PRAGMA table_info(access);"
+            echo "Current permissions for $dbPath"
+            echo "-------------------"
+            sudo sqlite3 "$dbPath" "SELECT * FROM access WHERE service='kTCCServiceScreenCapture';"
+            sudo sqlite3 "$dbPath" "$sqlQuery"
+            echo "Updated permissions for $dbPath"
+            echo "-------------------"
+            sudo sqlite3 "$dbPath" "SELECT * FROM access WHERE service='kTCCServiceScreenCapture';"
           done
 
       - name: Run tests
         id: test
         timeout-minutes: 10
-        working-directory:
-          /opt/local/var/macports/build/_Users_runner_work_Sunshine_Sunshine_ports_multimedia_Sunshine/Sunshine/work/build/tests
         run: |
+<<<<<<< HEAD
           sudo ./test_sunshine --gtest_color=yes
+=======
+          sudo port test "Sunshine"
+
+      - name: Test Logs
+        if: always()
+        run: |
+          logfile="/opt/local/var/macports/logs/_Users_runner_work_Sunshine_Sunshine_ports_multimedia_Sunshine/Sunshine/main.log"
+          cat "$logfile"
+>>>>>>> parent of 02ddbefd (fix(macos): Mouse input broken in-game (#2550))
 
       - name: Generate gcov report
         # any except canceled or skipped

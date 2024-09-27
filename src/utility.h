@@ -9,7 +9,6 @@
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <ostream>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -947,16 +946,6 @@ namespace util {
   view(const T &data) {
     return std::string_view((const char *) &data, sizeof(T));
   }
-
-  struct point_t {
-    double x;
-    double y;
-
-    friend std::ostream &
-    operator<<(std::ostream &os, const point_t &p) {
-      return (os << "Point(x: " << p.x << ", y: " << p.y << ")");
-    }
-  };
 
   namespace endian {
     template <class T = void>
